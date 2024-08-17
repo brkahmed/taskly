@@ -144,10 +144,14 @@ def delete_task(database: dict[str, dict], id: str) -> None:
     try:
         del database[id]
     except KeyError:
-        sys.exit('No such task with this id')
+        sys.exit("No such task with this id")
 
 
-def update_task(database: dict[str, dict], id: str, description: str) -> None: ...
+def update_task(database: dict[str, dict], id: str, description: str) -> None:
+    try:
+        database[id]["description"] = description
+    except KeyError:
+        sys.exit("No such task with this id")
 
 
 def list_task(
