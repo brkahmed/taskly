@@ -1,6 +1,8 @@
 from typing import Literal, Callable
 from argparse import ArgumentParser
+from datetime import datetime
 import json
+import sys
 
 """
 database schema:
@@ -45,7 +47,6 @@ def main() -> None:
                 {
                     "name_or_flags": ["id"],
                     "help": "id of task you want to delete",
-                    "type": int,
                 }
             ],
         },
@@ -56,7 +57,6 @@ def main() -> None:
                 {
                     "name_or_flags": ["id"],
                     "help": "id of task you want to update",
-                    "type": int,
                 },
                 {
                     "name_or_flags": ["description"],
@@ -80,12 +80,12 @@ def main() -> None:
         "mark-in-progress": {
             "target": mark_in_progress_task,
             "help": "set status of task to in-progress",
-            "args": [{"name_or_flags": ["id"], "help": "id of task", "type": int}],
+            "args": [{"name_or_flags": ["id"], "help": "id of task"}],
         },
         "mark-done": {
             "target": mark_done_task,
             "help": "set status of task to done",
-            "args": [{"name_or_flags": ["id"], "help": "id of task", "type": int}],
+            "args": [{"name_or_flags": ["id"], "help": "id of task"}],
         },
     }
 
@@ -100,7 +100,7 @@ def main() -> None:
 
 def load_database() -> dict[str, dict]:
     try:
-        with open("task.json") as f:
+        with open("tasks.json") as f:
             database = json.load(f)
     except FileNotFoundError:
         database = {}
@@ -129,13 +129,21 @@ def get_querie(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
     return querie, args
 
 
-def add_task(database: dict[str, dict], description: str) -> None: ...
+def add_task(database: dict[str, dict], description: str) -> None:
+    today: str = datetime.today().isoformat()
+    id: int = int(max("0", *database.keys())) + 1
+    database[str(id)] = {
+        "description": description,
+        "status": "todo",
+        "created-at": today,
+        "updated-at": today,
+    }
 
 
-def delete_task(database: dict[str, dict], id: int) -> None: ...
+def delete_task(database: dict[str, dict], id: str) -> None: ...
 
 
-def update_task(database: dict[str, dict], id: int, description: str) -> None: ...
+def update_task(database: dict[str, dict], id: str, description: str) -> None: ...
 
 
 def list_task(
@@ -144,10 +152,10 @@ def list_task(
 ) -> None: ...
 
 
-def mark_in_progress_task(database: dict[str, dict], id: int) -> None: ...
+def mark_in_progress_task(database: dict[str, dict], id: str) -> None: ...
 
 
-def mark_done_task(database: dict[str, dict], id: int) -> None: ...
+def mark_done_task(database: dict[str, dict], id: str) -> None: ...
 
 
 if __name__ == "__main__":
