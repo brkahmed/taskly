@@ -90,8 +90,12 @@ def main() -> None:
     }
 
     querie, args = get_querie(supported_queries)
-    print(querie, args)
+    
+    database: dict[str, dict] = load_database()
 
+    querie(database, *args)
+
+    save_database(database)
 
 def load_database() -> dict[str, dict]:
     try:
