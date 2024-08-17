@@ -90,12 +90,13 @@ def main() -> None:
     }
 
     querie, args = get_querie(supported_queries)
-    
+
     database: dict[str, dict] = load_database()
 
     querie(database, *args)
 
     save_database(database)
+
 
 def load_database() -> dict[str, dict]:
     try:
@@ -106,7 +107,9 @@ def load_database() -> dict[str, dict]:
     return database
 
 
-def save_database(database: dict[str, dict]) -> None: ...
+def save_database(database: dict[str, dict]) -> None:
+    with open("tasks.json", "w") as f:
+        json.dump(database, f)
 
 
 def get_querie(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
