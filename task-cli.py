@@ -1,6 +1,7 @@
-from typing import Literal, Callable
+from typing import Literal, Callable, Generator
 from argparse import ArgumentParser
 from datetime import datetime
+from tabulate import tabulate
 import json
 import sys
 
@@ -157,7 +158,23 @@ def update_task(database: dict[str, dict], id: str, description: str) -> None:
 def list_task(
     database: dict[str, dict],
     status: Literal["all", "done", "in-progress", "todo"] = "all",
-) -> None: ...
+) -> None:
+    table: Generator = (
+        {
+            "Id": id,
+            "Description": properties["description"],
+            "Status": properties["status"],
+            "Created At": datetime.fromisoformat(properties["created-at"]).strftime(
+                "%d/%m/%Y %H:%M:%S"
+            ),
+            "Updated At": datetime.fromisoformat(properties["updated-at"]).strftime(
+                "%d/%m/%Y %H:%M:%S"
+            ),
+        }
+        for id, properties in sorted(database.items(), key=lambda t: t[0])
+    )
+
+    print(tabulate(table, tablefmt="rounded_grid", headers="keys"), end="")
 
 
 def mark_in_progress_task(database: dict[str, dict], id: str) -> None: ...
