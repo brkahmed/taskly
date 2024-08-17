@@ -1,4 +1,5 @@
-from typing import Literal
+from typing import Literal, Callable
+from argparse import ArgumentParser
 import json
 
 """
@@ -18,10 +19,11 @@ supported queries schema:
             'help': str,
             'args': [
                 {
-                    'name_or_flags': []
+                    'name_or_flags': ['str', ]
                     'type': Callable,
                     'help': str,
-                    'choices': []
+                    'choices': [Any, ],
+                    'default': Any
                 },
             ]
         },
@@ -87,10 +89,13 @@ def main() -> None:
         },
     }
 
+    querie, args = get_querie(supported_queries)
+    print(querie, args)
+
 
 def load_database() -> dict[str, dict]:
     try:
-        with open('task.json') as f:
+        with open("task.json") as f:
             database = json.load(f)
     except FileNotFoundError:
         database = {}
@@ -100,7 +105,21 @@ def load_database() -> dict[str, dict]:
 def save_database(database: dict[str, dict]) -> None: ...
 
 
-def get_querie(supported_queries: dict[str, dict]) -> tuple[str, tuple]: ...
+def get_querie(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
+    parser: ArgumentParser = ArgumentParser(
+        description="A cli app that makes manage tasks easy"
+    )
+    sub_parsers = parser.add_subparsers(title="commands", dest="command", required=True)
+
+    for name, properties in supported_queries.items():
+        p = sub_parsers.add_parser(name, help=properties["help"])
+        for arg in properties["args"]:
+            p.add_argument(*arg.pop("name_or_flags"), **arg)
+
+    args: dict = parser.parse_args().__dict__
+    querie: Callable = supported_queries[args.pop("command")]["target"]
+
+    return querie, args
 
 
 def add_task(database: dict[str, dict], description: str) -> None: ...
