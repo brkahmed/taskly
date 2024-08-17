@@ -1,4 +1,5 @@
 from typing import Literal
+import json
 
 """
 database schema:
@@ -87,7 +88,13 @@ def main() -> None:
     }
 
 
-def load_database() -> dict[str, dict]: ...
+def load_database() -> dict[str, dict]:
+    try:
+        with open('task.json') as f:
+            database = json.load(f)
+    except FileNotFoundError:
+        database = {}
+    return database
 
 
 def save_database(database: dict[str, dict]) -> None: ...
