@@ -93,7 +93,7 @@ def main() -> None:
 
     database: dict[str, dict] = load_database()
 
-    querie(database, *args)
+    querie(database, **args)
 
     save_database(database)
 
