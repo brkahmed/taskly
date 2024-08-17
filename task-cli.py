@@ -177,10 +177,18 @@ def list_task(
     print(tabulate(table, tablefmt="rounded_grid", headers="keys"), end="")
 
 
-def mark_in_progress_task(database: dict[str, dict], id: str) -> None: ...
+def mark_in_progress_task(database: dict[str, dict], id: str) -> None:
+    try:
+        database[id]["status"] = "in-progress"
+    except KeyError:
+        sys.exit("No such task with this id")
 
 
-def mark_done_task(database: dict[str, dict], id: str) -> None: ...
+def mark_done_task(database: dict[str, dict], id: str) -> None:
+    try:
+        database[id]["status"] = "done"
+    except KeyError:
+        sys.exit("No such task with this id")
 
 
 if __name__ == "__main__":
