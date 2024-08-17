@@ -140,7 +140,11 @@ def add_task(database: dict[str, dict], description: str) -> None:
     }
 
 
-def delete_task(database: dict[str, dict], id: str) -> None: ...
+def delete_task(database: dict[str, dict], id: str) -> None:
+    try:
+        del database[id]
+    except KeyError:
+        sys.exit('No such task with this id')
 
 
 def update_task(database: dict[str, dict], id: str, description: str) -> None: ...
