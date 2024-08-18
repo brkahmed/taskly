@@ -1,77 +1,83 @@
-from typing import Literal, Callable, Generator
 from argparse import ArgumentParser
 from datetime import datetime
 from tabulate import tabulate
+from typing import Literal, Callable, Generator
 import json
+import os
 import sys
-
-"""
-database schema:
-    {
-        'id': {
-            'description': str,
-            'status': str,
-            'created-at': str,
-            'updated-at': str
-        },
-    }
-supported queries schema:
-    {
-        'name': {
-            'target': Callable,
-            'help': str,
-            'args': [
-                {
-                    'name_or_flags': ['str', ]
-                    'type': Callable,
-                    'help': str,
-                    'choices': [Any, ],
-                    'default': Any
-                },
-            ]
-        },
-    }
-"""
 
 
 def main() -> None:
-    supported_queries = {
+    supported_queries: dict[str, dict] = get_supported_queries()
+
+    querie, args = get_querie(supported_queries)
+
+    DATABASE_PATH: str = os.path.expanduser("~/taskly.json")
+
+    database: dict[str, dict] = load_database(DATABASE_PATH)
+
+    try:
+        querie(database, **args)
+    except KeyError:
+        sys.exit("No task found with the provided ID")
+
+    save_database(database, DATABASE_PATH)
+
+
+def load_database(path: str) -> dict[str, dict]:
+    try:
+        with open(path) as f:
+            database = json.load(f)
+    except FileNotFoundError:
+        database = {}
+    return database
+
+
+def save_database(database: dict[str, dict], path: str) -> None:
+    with open(path, "w") as f:
+        json.dump(database, f)
+
+
+def get_supported_queries() -> dict[str, dict]:
+    return {
         "add": {
             "target": add_task,
-            "help": "add task to your list",
-            "args": [{"name_or_flags": ["description"], "help": "task description"}],
+            "help": "Add a new task to your task list",
+            "args": [
+                {"name_or_flags": ["description"], "help": "Description of the task"}
+            ],
         },
         "delete": {
             "target": delete_task,
-            "help": "delete task from your list",
+            "help": "Delete a task from your task list",
             "args": [
                 {
                     "name_or_flags": ["id"],
-                    "help": "id of task you want to delete",
+                    "help": "ID of the task you want to delete",
                 }
             ],
         },
         "update": {
             "target": update_task,
-            "help": "update task description",
+            "help": "Update the description of a task",
             "args": [
                 {
                     "name_or_flags": ["id"],
-                    "help": "id of task you want to update",
+                    "help": "ID of the task to update",
                 },
                 {
                     "name_or_flags": ["description"],
-                    "help": "new description for the task",
+                    "help": "New description for the task",
                 },
             ],
         },
         "list": {
             "target": list_task,
-            "help": "list all yout task",
+            "help": "List all tasks or filter them by status",
             "args": [
                 {
                     "name_or_flags": ["--status", "-s"],
-                    "help": "status of task you want to list by default is all",
+                    "help": "Filter tasks by status (default is 'all')",
                     "choices": ["all", "done", "todo", "in-progress"],
                     "type": str.lower,
                     "default": "all",
@@ -80,42 +86,20 @@ def main() -> None:
         },
         "mark-in-progress": {
             "target": mark_in_progress_task,
-            "help": "set status of task to in-progress",
-            "args": [{"name_or_flags": ["id"], "help": "id of task"}],
+            "help": "Mark a task as 'in-progress'",
+            "args": [{"name_or_flags": ["id"], "help": "ID of the task"}],
         },
         "mark-done": {
             "target": mark_done_task,
-            "help": "set status of task to done",
-            "args": [{"name_or_flags": ["id"], "help": "id of task"}],
+            "help": "Mark a task as 'done'",
+            "args": [{"name_or_flags": ["id"], "help": "ID of the task"}],
         },
     }
-
-    querie, args = get_querie(supported_queries)
-
-    database: dict[str, dict] = load_database()
-
-    querie(database, **args)
-
-    save_database(database)
-
-
-def load_database() -> dict[str, dict]:
-    try:
-        with open("tasks.json") as f:
-            database = json.load(f)
-    except FileNotFoundError:
-        database = {}
-    return database
-
-
-def save_database(database: dict[str, dict]) -> None:
-    with open("tasks.json", "w") as f:
-        json.dump(database, f)
 
 
 def get_querie(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
     parser: ArgumentParser = ArgumentParser(
-        description="A cli app that makes manage tasks easy"
+        description="A CLI application to efficiently manage your tasks"
     )
     sub_parsers = parser.add_subparsers(title="commands", dest="command", required=True)
 
@@ -139,56 +123,48 @@ def add_task(database: dict[str, dict], description: str) -> None:
         "created-at": today,
         "updated-at": today,
     }
+    print("ID of added task", id)
 
 
 def delete_task(database: dict[str, dict], id: str) -> None:
-    try:
-        del database[id]
-    except KeyError:
-        sys.exit("No such task with this id")
+    del database[id]
 
 
 def update_task(database: dict[str, dict], id: str, description: str) -> None:
-    try:
-        database[id]["description"] = description
-    except KeyError:
-        sys.exit("No such task with this id")
+    database[id]["description"] = description
 
 
 def list_task(
     database: dict[str, dict],
     status: Literal["all", "done", "in-progress", "todo"] = "all",
 ) -> None:
+    DATETIME_FORMAT: str = "%d/%m/%Y %H:%M:%S"
+
     table: Generator = (
         {
             "Id": id,
             "Description": properties["description"],
             "Status": properties["status"],
             "Created At": datetime.fromisoformat(properties["created-at"]).strftime(
-                "%d/%m/%Y %H:%M:%S"
+                DATETIME_FORMAT
             ),
             "Updated At": datetime.fromisoformat(properties["updated-at"]).strftime(
-                "%d/%m/%Y %H:%M:%S"
+                DATETIME_FORMAT
             ),
         }
         for id, properties in sorted(database.items(), key=lambda t: t[0])
+        if status == "all" or status == properties["status"]
     )
 
     print(tabulate(table, tablefmt="rounded_grid", headers="keys"), end="")
 
 
 def mark_in_progress_task(database: dict[str, dict], id: str) -> None:
-    try:
-        database[id]["status"] = "in-progress"
-    except KeyError:
-        sys.exit("No such task with this id")
+    database[id]["status"] = "in-progress"
 
 
 def mark_done_task(database: dict[str, dict], id: str) -> None:
-    try:
-        database[id]["status"] = "done"
-    except KeyError:
-        sys.exit("No such task with this id")
+    database[id]["status"] = "done"
 
 
 if __name__ == "__main__":
