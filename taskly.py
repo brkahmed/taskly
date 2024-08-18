@@ -116,22 +116,25 @@ def get_querie(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
 
 def add_task(database: dict[str, dict], description: str) -> None:
     today: str = datetime.today().isoformat()
-    id: int = int(max("0", *database.keys())) + 1
-    database[str(id)] = {
+    id: str = str(int(max("0", *database.keys())) + 1)
+    database[id] = {
         "description": description,
         "status": "todo",
         "created-at": today,
         "updated-at": today,
     }
-    print("ID of added task", id)
+    list_task({id: database[id]})
 
 
 def delete_task(database: dict[str, dict], id: str) -> None:
+    list_task({id: database[id]})
     del database[id]
 
 
 def update_task(database: dict[str, dict], id: str, description: str) -> None:
     database[id]["description"] = description
+    database[id]["updated-at"] = datetime.today().isoformat()
+    list_task({id: database[id]})
 
 
 def list_task(
@@ -156,15 +159,21 @@ def list_task(
         if status == "all" or status == properties["status"]
     )
 
-    print(tabulate(table, tablefmt="rounded_grid", headers="keys"), end="")
+    print(
+        tabulate(table, tablefmt="rounded_grid", headers="keys") or "Nothing to display"
+    )
 
 
 def mark_in_progress_task(database: dict[str, dict], id: str) -> None:
     database[id]["status"] = "in-progress"
+    database[id]["updated-at"] = datetime.today().isoformat()
+    list_task({id: database[id]})
 
 
 def mark_done_task(database: dict[str, dict], id: str) -> None:
     database[id]["status"] = "done"
+    database[id]["updated-at"] = datetime.today().isoformat()
+    list_task({id: database[id]})
 
 
 if __name__ == "__main__":
