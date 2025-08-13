@@ -1,23 +1,24 @@
-from argparse import ArgumentParser
-from datetime import datetime
-from tabulate import tabulate
-from typing import Literal, Callable, Generator
 import json
 import os
 import sys
+from argparse import ArgumentParser
+from datetime import datetime
+from typing import Callable, Generator, Literal
+
+from tabulate import tabulate
 
 
 def main() -> None:
     supported_queries: dict[str, dict] = get_supported_queries()
 
-    querie, args = get_querie(supported_queries)
+    query, args = get_query(supported_queries)
 
     DATABASE_PATH: str = os.path.expanduser("~/taskly.json")
 
     database: dict[str, dict] = load_database(DATABASE_PATH)
 
     try:
-        querie(database, **args)
+        query(database, **args)
     except KeyError:
         sys.exit("No task found with the provided ID")
 
@@ -97,7 +98,7 @@ def get_supported_queries() -> dict[str, dict]:
     }
 
 
-def get_querie(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
+def get_query(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
     parser: ArgumentParser = ArgumentParser(
         description="A CLI application to efficiently manage your tasks"
     )
@@ -109,9 +110,9 @@ def get_querie(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
             p.add_argument(*arg.pop("name_or_flags"), **arg)
 
     args: dict = parser.parse_args().__dict__
-    querie: Callable = supported_queries[args.pop("command")]["target"]
+    query: Callable = supported_queries[args.pop("command")]["target"]
 
-    return querie, args
+    return query, args
 
 
 def add_task(database: dict[str, dict], description: str) -> None:

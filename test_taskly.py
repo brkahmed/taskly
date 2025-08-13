@@ -1,11 +1,12 @@
 import pytest
+
 from taskly import (
-    load_database,
     add_task,
-    update_task,
     delete_task,
-    mark_in_progress_task,
+    load_database,
     mark_done_task,
+    mark_in_progress_task,
+    update_task,
 )
 
 DATABASE_PATH: str = "test.json"
@@ -25,7 +26,7 @@ def test_update_task() -> None:
     update_task(database, "1", "goodbye, world")
     assert database["1"]["description"] == "goodbye, world"
     with pytest.raises(KeyError):
-        update_task(database, 3, "Error")
+        update_task(database, 3, "Error")  # type: ignore
     with pytest.raises(KeyError):
         update_task(database, "0", "Error")
 
@@ -34,7 +35,7 @@ def test_mark_in_progress_task() -> None:
     mark_in_progress_task(database, "2")
     assert database["2"]["status"] == "in-progress"
     with pytest.raises(KeyError):
-        mark_in_progress_task(database, 6)
+        mark_in_progress_task(database, 6)  # type: ignore
     with pytest.raises(KeyError):
         mark_in_progress_task(database, "58")
 
@@ -43,7 +44,7 @@ def test_mark_done_task() -> None:
     mark_done_task(database, "3")
     assert database["3"]["status"] == "done"
     with pytest.raises(KeyError):
-        mark_done_task(database, 5)
+        mark_done_task(database, 5)  # type: ignore
     with pytest.raises(KeyError):
         mark_done_task(database, "6")
 
@@ -52,6 +53,6 @@ def test_delete_task() -> None:
     delete_task(database, "4")
     assert "4" not in database
     with pytest.raises(KeyError):
-        delete_task(database, 5)
+        delete_task(database, 5)  # type: ignore
     with pytest.raises(KeyError):
         delete_task(database, "4")
