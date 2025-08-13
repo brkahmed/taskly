@@ -1,0 +1,19 @@
+# UV lock file (dependencies)
+uv.lock
+
+# Python bytecode
+*.pyc
+__pycache__/
+
+# Build / packaging
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db

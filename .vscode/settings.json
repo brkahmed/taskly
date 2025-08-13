@@ -1,3 +1,11 @@
 {
-  "cSpell.words": ["Suiiiiii", "tablefmt", "Taskly"]
+  "cSpell.words": [
+    "pycache",
+    "pytest",
+    "setuptools",
+    "Suiiiiii",
+    "tablefmt",
+    "Taskly",
+    "venv"
+  ]
 }
