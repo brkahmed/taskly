@@ -30,6 +30,10 @@ def test_update_task() -> None:
         update_task(database, 3, "Error")  # type: ignore
     with pytest.raises(KeyError):
         update_task(database, "0", "Error")
+    update_task(database, "1", status="in-progress")
+    assert database["1"]["status"] == "in-progress"
+    update_task(database, "1")
+    assert database["1"]["status"] == "in-progress" and database["1"]["description"] == "goodbye, world"
 
 
 def test_mark_in_progress_task() -> None:

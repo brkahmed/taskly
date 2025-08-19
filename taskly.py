@@ -8,6 +8,7 @@ from typing import (
     Annotated,
     Callable,
     Literal,
+    Optional,
     TypeAlias,
     TypedDict,
     get_args,
@@ -55,9 +56,7 @@ def save_database(database: Database, path: str) -> None:
 
 
 def parse_args() -> tuple[Callable, dict]:
-    parser: ArgumentParser = ArgumentParser(
-        description="A CLI application to efficiently manage your tasks"
-    )
+    parser: ArgumentParser = ArgumentParser(description="A CLI application to efficiently manage your tasks")
     subparsers = parser.add_subparsers(title="commands", dest="command", required=True)
 
     for name, properties in supported_queries.items():
@@ -128,10 +127,14 @@ def delete_task(
 def update_task(
     database: Database,
     id: Annotated[str, "ID of the task you want to update"],
-    description: Annotated[str, "New description for the task"],
+    description: Annotated[Optional[str], "New description for the task", "--description", "-d"] = None,
+    status: Annotated[Optional[TaskStatus], "New status for the task", "--status", "-s"] = None,
 ) -> None:
-    """Update the description of a task"""
-    database[id]["description"] = description
+    """Update the description or status of a task"""
+    if description is not None:
+        database[id]["description"] = description
+    if status is not None:
+        database[id]["status"] = status
     database[id]["updated-at"] = datetime.today().isoformat()
     list_task({id: database[id]})
 
@@ -139,9 +142,7 @@ def update_task(
 @add_query
 def list_task(
     database: Database,
-    status: Annotated[
-        TaskStatus, "List all tasks or filter them by status", "--status", "-s"
-    ] = "all",
+    status: Annotated[TaskStatus, "List all tasks or filter them by status", "--status", "-s"] = "all",
 ) -> None:
     """List all tasks or filter them by status"""
     DATETIME_FORMAT: str = "%d/%m/%Y %H:%M:%S"
@@ -150,19 +151,13 @@ def list_task(
             "Id": id,
             "Description": properties["description"],
             "Status": properties["status"],
-            "Created At": datetime.fromisoformat(properties["created-at"]).strftime(
-                DATETIME_FORMAT
-            ),
-            "Updated At": datetime.fromisoformat(properties["updated-at"]).strftime(
-                DATETIME_FORMAT
-            ),
+            "Created At": datetime.fromisoformat(properties["created-at"]).strftime(DATETIME_FORMAT),
+            "Updated At": datetime.fromisoformat(properties["updated-at"]).strftime(DATETIME_FORMAT),
         }
         for id, properties in sorted(database.items(), key=lambda t: t[0])
         if status == "all" or status == properties["status"]
     )
-    print(
-        tabulate(table, tablefmt="rounded_grid", headers="keys") or "Nothing to display"
-    )
+    print(tabulate(table, tablefmt="rounded_grid", headers="keys") or "Nothing to display")
 
 
 @add_query
@@ -171,9 +166,7 @@ def mark_in_progress_task(
     id: Annotated[str, "ID of the task"],
 ) -> None:
     """Mark a task as 'in-progress'"""
-    database[id]["status"] = "in-progress"
-    database[id]["updated-at"] = datetime.today().isoformat()
-    list_task({id: database[id]})
+    update_task(database, id, status="in-progress")
 
 
 @add_query
@@ -182,9 +175,7 @@ def mark_done_task(
     id: Annotated[str, "ID of the task"],
 ) -> None:
     """Mark a task as 'done'"""
-    database[id]["status"] = "done"
-    database[id]["updated-at"] = datetime.today().isoformat()
-    list_task({id: database[id]})
+    update_task(database, id, status="done")
 
 
 if __name__ == "__main__":
