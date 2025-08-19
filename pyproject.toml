@@ -16,10 +16,12 @@ taskly = "taskly:main"
 [tool.uv]
 package = true
 
+[tool.setuptools]
+py-modules = ["taskly"]
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
-
 
 [dependency-groups]
 dev = ["pytest>=8.3.2"]
