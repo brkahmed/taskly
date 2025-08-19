@@ -1,6 +1,7 @@
 import pytest
 
 from taskly import (
+    Database,
     add_task,
     delete_task,
     load_database,
@@ -10,7 +11,7 @@ from taskly import (
 )
 
 DATABASE_PATH: str = "test.json"
-database: dict[str, dict] = load_database(DATABASE_PATH)
+database: Database = load_database(DATABASE_PATH)
 
 
 def test_add_task() -> None:

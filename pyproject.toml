@@ -1,6 +1,6 @@
 [project]
 name = "taskly"
-version = "0.1.0"
+version = "0.2.0"
 description = "A CLI application to manage tasks."
 authors = [{ name = "Ahmed", email = "braika7med@gmail.com" }]
 readme = "README.md"
@@ -18,6 +18,11 @@ package = true
 
 [tool.setuptools]
 py-modules = ["taskly"]
+
+[tool.ruff]
+line-length = 90
+select = ["I"]
+fix = true
 
 [build-system]
 requires = ["setuptools", "wheel"]

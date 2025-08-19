@@ -3,19 +3,34 @@ import os
 import sys
 from argparse import ArgumentParser
 from datetime import datetime
-from typing import Callable, Generator, Literal
+from inspect import signature
+from typing import (
+    Annotated,
+    Callable,
+    Literal,
+    TypeAlias,
+    TypedDict,
+    get_args,
+    get_origin,
+)
 
 from tabulate import tabulate
 
+supported_queries: dict[str, dict] = {}
+TaskStatus: TypeAlias = Literal["all", "done", "in-progress", "todo"]
+DatabaseRow = TypedDict(
+    "DatabaseRow",
+    {"description": str, "status": TaskStatus, "created-at": str, "updated-at": str},
+)
+Database: TypeAlias = dict[str, DatabaseRow]
+
 
 def main() -> None:
-    supported_queries: dict[str, dict] = get_supported_queries()
-
-    query, args = get_query(supported_queries)
+    query, args = parse_args()
 
     DATABASE_PATH: str = os.path.expanduser("~/taskly.json")
 
-    database: dict[str, dict] = load_database(DATABASE_PATH)
+    database: Database = load_database(DATABASE_PATH)
 
     try:
         query(database, **args)
@@ -25,99 +40,71 @@ def main() -> None:
     save_database(database, DATABASE_PATH)
 
 
-def load_database(path: str) -> dict[str, dict]:
+def load_database(path: str) -> Database:
     try:
         with open(path) as f:
-            database = json.load(f)
+            database: Database = json.load(f)
     except FileNotFoundError:
         database = {}
     return database
 
 
-def save_database(database: dict[str, dict], path: str) -> None:
+def save_database(database: Database, path: str) -> None:
     with open(path, "w") as f:
-        json.dump(database, f)
+        json.dump(database, f, indent=2, ensure_ascii=False)
 
 
-def get_supported_queries() -> dict[str, dict]:
-    return {
-        "add": {
-            "target": add_task,
-            "help": "Add a new task to your task list",
-            "args": [
-                {"name_or_flags": ["description"], "help": "Description of the task"}
-            ],
-        },
-        "delete": {
-            "target": delete_task,
-            "help": "Delete a task from your task list",
-            "args": [
-                {
-                    "name_or_flags": ["id"],
-                    "help": "ID of the task you want to delete",
-                }
-            ],
-        },
-        "update": {
-            "target": update_task,
-            "help": "Update the description of a task",
-            "args": [
-                {
-                    "name_or_flags": ["id"],
-                    "help": "ID of the task to update",
-                },
-                {
-                    "name_or_flags": ["description"],
-                    "help": "New description for the task",
-                },
-            ],
-        },
-        "list": {
-            "target": list_task,
-            "help": "List all tasks or filter them by status",
-            "args": [
-                {
-                    "name_or_flags": ["--status", "-s"],
-                    "help": "Filter tasks by status (default is 'all')",
-                    "choices": ["all", "done", "todo", "in-progress"],
-                    "type": str.lower,
-                    "default": "all",
-                }
-            ],
-        },
-        "mark-in-progress": {
-            "target": mark_in_progress_task,
-            "help": "Mark a task as 'in-progress'",
-            "args": [{"name_or_flags": ["id"], "help": "ID of the task"}],
-        },
-        "mark-done": {
-            "target": mark_done_task,
-            "help": "Mark a task as 'done'",
-            "args": [{"name_or_flags": ["id"], "help": "ID of the task"}],
-        },
-    }
-
-
-def get_query(supported_queries: dict[str, dict]) -> tuple[Callable, dict]:
+def parse_args() -> tuple[Callable, dict]:
     parser: ArgumentParser = ArgumentParser(
         description="A CLI application to efficiently manage your tasks"
     )
-    sub_parsers = parser.add_subparsers(title="commands", dest="command", required=True)
+    subparsers = parser.add_subparsers(title="commands", dest="command", required=True)
 
     for name, properties in supported_queries.items():
-        p = sub_parsers.add_parser(name, help=properties["help"])
+        p = subparsers.add_parser(name, help=properties["help"])
         for arg in properties["args"]:
-            p.add_argument(*arg.pop("name_or_flags"), **arg)
+            name_or_flags = arg.pop("name_or_flags")
+            p.add_argument(*name_or_flags, **arg)
+            arg["name_or_flags"] = name_or_flags  # to keep the original name or flags
 
-    args: dict = parser.parse_args().__dict__
+    args: dict = vars(parser.parse_args())
     query: Callable = supported_queries[args.pop("command")]["target"]
 
     return query, args
 
 
-def add_task(database: dict[str, dict], description: str) -> None:
+def add_query(func: Callable) -> Callable:
+    """Decorator to add a query to the supported queries dictionary."""
+    name = func.__name__.removesuffix("_task")
+    supported_queries[name] = {
+        "target": func,
+        "help": func.__doc__,
+        "args": [],
+    }
+    args = supported_queries[name]["args"]
+    for param in signature(func).parameters.values():
+        if param.name == "database":
+            continue
+        type, *metadata = get_args(param.annotation)
+        args.append(
+            {
+                "name_or_flags": metadata[1:] if len(metadata) > 1 else [param.name],
+                "help": metadata[0],
+                "choices": get_args(type) if get_origin(type) is Literal else None,
+                "default": param.default if param.default is not param.empty else None,
+            }
+        )
+    return func
+
+
+@add_query
+def add_task(
+    database: Database,
+    description: Annotated[str, "Description of the task"],
+) -> None:
+    """Add a new task to your task list"""
     today: str = datetime.today().isoformat()
-    id: str = str(int(max("0", *database.keys())) + 1)
+    id: str = str(max(map(int, database.keys()), default=0) + 1)
     database[id] = {
         "description": description,
         "status": "todo",
@@ -127,24 +114,38 @@ def add_task(database: dict[str, dict], description: str) -> None:
     list_task({id: database[id]})
 
 
-def delete_task(database: dict[str, dict], id: str) -> None:
+@add_query
+def delete_task(
+    database: Database,
+    id: Annotated[str, "ID of the task you want to delete"],
+) -> None:
+    """Delete a task from your task list"""
     list_task({id: database[id]})
     del database[id]
 
 
-def update_task(database: dict[str, dict], id: str, description: str) -> None:
+@add_query
+def update_task(
+    database: Database,
+    id: Annotated[str, "ID of the task you want to update"],
+    description: Annotated[str, "New description for the task"],
+) -> None:
+    """Update the description of a task"""
     database[id]["description"] = description
     database[id]["updated-at"] = datetime.today().isoformat()
     list_task({id: database[id]})
 
 
+@add_query
 def list_task(
-    database: dict[str, dict],
-    status: Literal["all", "done", "in-progress", "todo"] = "all",
+    database: Database,
+    status: Annotated[
+        TaskStatus, "List all tasks or filter them by status", "--status", "-s"
+    ] = "all",
 ) -> None:
+    """List all tasks or filter them by status"""
     DATETIME_FORMAT: str = "%d/%m/%Y %H:%M:%S"
-
-    table: Generator = (
+    table = (
         {
             "Id": id,
             "Description": properties["description"],
@@ -159,19 +160,28 @@ def list_task(
         for id, properties in sorted(database.items(), key=lambda t: t[0])
         if status == "all" or status == properties["status"]
     )
-
     print(
         tabulate(table, tablefmt="rounded_grid", headers="keys") or "Nothing to display"
     )
 
 
-def mark_in_progress_task(database: dict[str, dict], id: str) -> None:
+@add_query
+def mark_in_progress_task(
+    database: Database,
+    id: Annotated[str, "ID of the task"],
+) -> None:
+    """Mark a task as 'in-progress'"""
     database[id]["status"] = "in-progress"
     database[id]["updated-at"] = datetime.today().isoformat()
     list_task({id: database[id]})
 
 
-def mark_done_task(database: dict[str, dict], id: str) -> None:
+@add_query
+def mark_done_task(
+    database: Database,
+    id: Annotated[str, "ID of the task"],
+) -> None:
+    """Mark a task as 'done'"""
     database[id]["status"] = "done"
     database[id]["updated-at"] = datetime.today().isoformat()
     list_task({id: database[id]})
