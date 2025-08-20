@@ -1,9 +1,12 @@
+from datetime import date
+
 import pytest
 
 from taskly import (
     Database,
     add_task,
     delete_task,
+    get_date_checker,
     load_database,
     mark_done_task,
     mark_in_progress_task,
@@ -61,3 +64,34 @@ def test_delete_task() -> None:
         delete_task(database, 5)  # type: ignore
     with pytest.raises(KeyError):
         delete_task(database, "4")
+
+
+def test_date_checker() -> None:
+    date_checker = get_date_checker("2008-06-24")
+    assert date_checker("2008-06-24T14:30:00.000000")
+    assert not date_checker("2008-06-25T14:30:00.000000")
+
+    date_checker = get_date_checker("2008-06")
+    assert date_checker("2008-06-24T14:30:00.000000")
+    assert date_checker("2008-06-1T14:30:00.000000")
+    assert not date_checker("2025-07-1T14:30:00.000000")
+    assert not date_checker("2008-05-1T14:30:00.000000")
+
+    date_checker = get_date_checker("2008")
+    assert date_checker("2008-06-24T14:30:00.000000")
+    assert date_checker("2008-01-01T14:30:00.000000")
+    assert not date_checker("2024-12-31T14:30:00.000000")
+    assert not date_checker("2026-12-31T14:30:00.000000")
+
+    date_checker = get_date_checker(">2008-06-24")
+    assert date_checker("2008-06-24T14:30:00.000000")
+    assert date_checker("2025-05-21T14:30:00.000000")
+    assert date_checker("2022-06-23T14:30:00.000000")
+    assert not date_checker("2001-06-22T14:30:00.000000")
+
+    date_checker = get_date_checker("<2008-06-24")
+    assert date_checker("2008-06-24T14:30:00.000000")
+    assert date_checker("2002-06-24T14:30:00.000000")
+    assert date_checker("2008-06-23T14:30:00.000000")
+    assert not date_checker("2008-06-25T14:30:00.000000")
+    assert not date_checker("2023-06-25T14:30:00.000000")
