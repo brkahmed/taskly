@@ -12,6 +12,7 @@ from typing import (
     Optional,
     TypeAlias,
     TypedDict,
+    Union,
     get_args,
     get_origin,
 )
@@ -77,7 +78,7 @@ def parse_args() -> tuple[Callable, dict]:
 
 def add_query(func: Callable) -> Callable:
     """Decorator to add a query to the supported queries dictionary."""
-    name = func.__name__.removesuffix("_task")
+    name = func.__name__.removesuffix("_task").replace("_", "-")
     supported_queries[name] = {
         "target": func,
         "help": func.__doc__,
@@ -88,6 +89,8 @@ def add_query(func: Callable) -> Callable:
         if param.name == "database":
             continue
         type, *metadata = get_args(param.annotation)
+        if get_origin(type) is Union:
+            type = get_args(type)[0]
         args.append(
             {
                 "name_or_flags": metadata[1:] if len(metadata) > 1 else [param.name],
@@ -117,16 +120,6 @@ def add_task(
 
 
 @add_query
-def delete_task(
-    database: Database,
-    id: Annotated[str, "ID of the task you want to delete"],
-) -> None:
-    """Delete a task from your task list"""
-    list_task({id: database[id]})
-    del database[id]
-
-
-@add_query
 def update_task(
     database: Database,
     id: Annotated[str, "ID of the task you want to update"],
@@ -140,6 +133,34 @@ def update_task(
         database[id]["status"] = status
     database[id]["updated-at"] = datetime.today().isoformat(timespec="seconds")
     list_task({id: database[id]})
+
+
+@add_query
+def mark_in_progress_task(
+    database: Database,
+    id: Annotated[str, "ID of the task"],
+) -> None:
+    """Mark a task as 'in-progress'"""
+    update_task(database, id, status="in-progress")
+
+
+@add_query
+def mark_done_task(
+    database: Database,
+    id: Annotated[str, "ID of the task"],
+) -> None:
+    """Mark a task as 'done'"""
+    update_task(database, id, status="done")
+
+
+@add_query
+def delete_task(
+    database: Database,
+    id: Annotated[str, "ID of the task you want to delete"],
+) -> None:
+    """Delete a task from your task list"""
+    list_task({id: database[id]})
+    del database[id]
 
 
 @add_query
@@ -191,24 +212,6 @@ def get_date_checker(date_string: Optional[str] = None) -> Callable[[str], bool]
         except ValueError:
             continue
     raise ValueError(f"Invalid date format: '{date_string}'. Expected formats: YYYY-MM-DD, YYYY-MM, or YYYY.")
-
-
-@add_query
-def mark_in_progress_task(
-    database: Database,
-    id: Annotated[str, "ID of the task"],
-) -> None:
-    """Mark a task as 'in-progress'"""
-    update_task(database, id, status="in-progress")
-
-
-@add_query
-def mark_done_task(
-    database: Database,
-    id: Annotated[str, "ID of the task"],
-) -> None:
-    """Mark a task as 'done'"""
-    update_task(database, id, status="done")
 
 
 if __name__ == "__main__":
