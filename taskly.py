@@ -1,4 +1,5 @@
 import json
+import operator
 import os
 import sys
 from argparse import ArgumentParser
@@ -18,7 +19,7 @@ from typing import (
 from tabulate import tabulate
 
 supported_queries: dict[str, dict] = {}
-TaskStatus: TypeAlias = Literal["all", "done", "in-progress", "todo"]
+TaskStatus: TypeAlias = Literal["done", "in-progress", "todo"]
 DatabaseRow = TypedDict(
     "DatabaseRow",
     {"description": str, "status": TaskStatus, "created-at": str, "updated-at": str},
@@ -37,6 +38,8 @@ def main() -> None:
         query(database, **args)
     except KeyError:
         sys.exit("No task found with the provided ID")
+    except Exception as e:
+        sys.exit(e.args[0])
 
     save_database(database, DATABASE_PATH)
 
@@ -102,7 +105,7 @@ def add_task(
     description: Annotated[str, "Description of the task"],
 ) -> None:
     """Add a new task to your task list"""
-    today: str = datetime.today().isoformat()
+    today: str = datetime.today().isoformat(timespec="seconds")
     id: str = str(max(map(int, database.keys()), default=0) + 1)
     database[id] = {
         "description": description,
@@ -135,17 +138,24 @@ def update_task(
         database[id]["description"] = description
     if status is not None:
         database[id]["status"] = status
-    database[id]["updated-at"] = datetime.today().isoformat()
+    database[id]["updated-at"] = datetime.today().isoformat(timespec="seconds")
     list_task({id: database[id]})
 
 
 @add_query
 def list_task(
     database: Database,
-    status: Annotated[TaskStatus, "List all tasks or filter them by status", "--status", "-s"] = "all",
+    status: Annotated[Literal[TaskStatus, "all"], "List all tasks or filter them by status", "--status", "-s"] = "all",
+    date: Annotated[
+        Optional[str],
+        "Filter tasks by date (YYYY-MM-DD). Use <, >, = operators (e.g. '<2025-01-01' means on or before)",
+        "--date",
+        "-d",
+    ] = None,
 ) -> None:
-    """List all tasks or filter them by status"""
-    DATETIME_FORMAT: str = "%d/%m/%Y %H:%M:%S"
+    """List all tasks or filter them by status and date"""
+    DATETIME_FORMAT: str = "%Y/%m/%d %H:%M:%S"
+    date_checker = get_date_checker(date)
     table = (
         {
             "Id": id,
@@ -155,9 +165,32 @@ def list_task(
             "Updated At": datetime.fromisoformat(properties["updated-at"]).strftime(DATETIME_FORMAT),
         }
         for id, properties in sorted(database.items(), key=lambda t: t[0])
-        if status == "all" or status == properties["status"]
+        if (status == "all" or status == properties["status"]) and date_checker(properties["created-at"])
     )
     print(tabulate(table, tablefmt="rounded_grid", headers="keys") or "Nothing to display")
+
+
+def get_date_checker(date_string: Optional[str] = None) -> Callable[[str], bool]:
+    if date_string is None:
+        return lambda _: True  # If no date is provided, return True for all dates
+    operators = {
+        "<": operator.le,
+        ">": operator.ge,
+        "=": operator.eq,
+    }  # mapping < to le is not a bug, it is intentional
+    op = "="  # this line is not needed i just add it to ignore unbound warning
+    for op in operators.keys():  # default to '='
+        if date_string.startswith(op):
+            date_string = date_string[len(op) :].strip()
+            break
+
+    for fmt in ["%Y-%m-%d", "%Y-%m", "%Y"]:
+        try:
+            date = datetime.strptime(date_string, fmt).date()
+            return lambda other: operators[op](datetime.strptime(other[: len(date_string)], fmt).date(), date)
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid date format: '{date_string}'. Expected formats: YYYY-MM-DD, YYYY-MM, or YYYY.")
 
 
 @add_query
