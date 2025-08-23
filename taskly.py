@@ -1,10 +1,10 @@
 import json
 import operator
-import os
 import sys
 from argparse import ArgumentParser
 from datetime import datetime
 from inspect import signature
+from pathlib import Path
 from typing import (
     Annotated,
     Callable,
@@ -29,21 +29,19 @@ Database: TypeAlias = dict[str, DatabaseRow]
 
 
 def main() -> None:
-    query, args = parse_args()
+    query, args, db_path = parse_args()
 
-    DATABASE_PATH: str = os.path.expanduser("~/taskly.json")
-
-    database: Database = load_database(DATABASE_PATH)
+    database: Database = load_database(db_path)
 
     try:
         query(database, **args)
     except Exception as e:
         sys.exit(str(e))
 
-    save_database(database, DATABASE_PATH)
+    save_database(database, db_path)
 
 
-def load_database(path: str) -> Database:
+def load_database(path: Path) -> Database:
     try:
         with open(path) as f:
             return json.load(f)
@@ -51,13 +49,14 @@ def load_database(path: str) -> Database:
         return {}
 
 
-def save_database(database: Database, path: str) -> None:
+def save_database(database: Database, path: Path) -> None:
     with open(path, "w") as f:
         json.dump(database, f, indent=2, ensure_ascii=False)
 
 
-def parse_args() -> tuple[Callable, dict]:
+def parse_args() -> tuple[Callable, dict, Path]:
     parser: ArgumentParser = ArgumentParser(description="A CLI application to efficiently manage your tasks")
+    parser.add_argument("--db", help="Path to the database file (default: '~/taskly.json')", default="~/taskly.json")
     subparsers = parser.add_subparsers(title="commands", dest="command", required=True)
 
     for name, properties in supported_queries.items():
@@ -69,8 +68,11 @@ def parse_args() -> tuple[Callable, dict]:
 
     args: dict = vars(parser.parse_args())
     query: Callable = supported_queries[args.pop("command")]["target"]
+    db_path: Path = Path(args.pop("db")).expanduser().resolve()
+    if db_path.is_dir():
+        parser.error(f"Database path '{db_path}' is a directory")
 
-    return query, args
+    return query, args, db_path
 
 
 def add_query(func: Callable) -> Callable:
