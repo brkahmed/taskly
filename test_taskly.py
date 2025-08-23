@@ -37,6 +37,8 @@ def test_update_task() -> None:
     assert database["1"]["status"] == "in-progress"
     update_task(database, "1")
     assert database["1"]["status"] == "in-progress" and database["1"]["description"] == "goodbye, world"
+    with pytest.raises(ValueError):
+        update_task(database, "1", status="invalid-status")
 
 
 def test_mark_in_progress_task() -> None:
@@ -64,6 +66,11 @@ def test_delete_task() -> None:
         delete_task(database, 5)  # type: ignore
     with pytest.raises(KeyError):
         delete_task(database, "4")
+
+
+def test_list_task() -> None:
+    with pytest.raises(ValueError):
+        update_task(database, "1", status="invalid-status")
 
 
 def test_date_checker() -> None:
@@ -95,3 +102,8 @@ def test_date_checker() -> None:
     assert date_checker("2008-06-23T14:30:00.000000")
     assert not date_checker("2008-06-25T14:30:00.000000")
     assert not date_checker("2023-06-25T14:30:00.000000")
+
+    with pytest.raises(ValueError):
+        get_date_checker("invalid-date")
+    with pytest.raises(ValueError):
+        get_date_checker("2025-13-01")

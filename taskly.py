@@ -1,10 +1,10 @@
 import json
 import operator
-import os
 import sys
 from argparse import ArgumentParser
 from datetime import datetime
 from inspect import signature
+from pathlib import Path
 from typing import (
     Annotated,
     Callable,
@@ -29,38 +29,34 @@ Database: TypeAlias = dict[str, DatabaseRow]
 
 
 def main() -> None:
-    query, args = parse_args()
+    query, args, db_path = parse_args()
 
-    DATABASE_PATH: str = os.path.expanduser("~/taskly.json")
-
-    database: Database = load_database(DATABASE_PATH)
+    database: Database = load_database(db_path)
 
     try:
         query(database, **args)
-    except KeyError:
-        sys.exit("No task found with the provided ID")
     except Exception as e:
-        sys.exit(e.args[0])
+        sys.exit(str(e))
 
-    save_database(database, DATABASE_PATH)
+    save_database(database, db_path)
 
 
-def load_database(path: str) -> Database:
+def load_database(path: Path) -> Database:
     try:
         with open(path) as f:
-            database: Database = json.load(f)
+            return json.load(f)
     except FileNotFoundError:
-        database = {}
-    return database
+        return {}
 
 
-def save_database(database: Database, path: str) -> None:
+def save_database(database: Database, path: Path) -> None:
     with open(path, "w") as f:
         json.dump(database, f, indent=2, ensure_ascii=False)
 
 
-def parse_args() -> tuple[Callable, dict]:
+def parse_args() -> tuple[Callable, dict, Path]:
     parser: ArgumentParser = ArgumentParser(description="A CLI application to efficiently manage your tasks")
+    parser.add_argument("--db", help="Path to the database file (default: '~/taskly.json')", default="~/taskly.json")
     subparsers = parser.add_subparsers(title="commands", dest="command", required=True)
 
     for name, properties in supported_queries.items():
@@ -72,8 +68,11 @@ def parse_args() -> tuple[Callable, dict]:
 
     args: dict = vars(parser.parse_args())
     query: Callable = supported_queries[args.pop("command")]["target"]
+    db_path: Path = Path(args.pop("db")).expanduser().resolve()
+    if db_path.is_dir():
+        parser.error(f"Database path '{db_path}' is a directory")
 
-    return query, args
+    return query, args, db_path
 
 
 def add_query(func: Callable) -> Callable:
@@ -127,9 +126,13 @@ def update_task(
     status: Annotated[Optional[TaskStatus], "New status for the task", "--status", "-s"] = None,
 ) -> None:
     """Update the description or status of a task"""
+    if id not in database:
+        raise KeyError(f"No task found with ID '{id}'")
     if description is not None:
         database[id]["description"] = description
     if status is not None:
+        if status not in (valid := get_args(TaskStatus)):
+            raise ValueError(f"Invalid status '{status}'. Valid statuses are: {', '.join(valid)}")
         database[id]["status"] = status
     database[id]["updated-at"] = datetime.today().isoformat(timespec="seconds")
     list_task({id: database[id]})
@@ -159,6 +162,8 @@ def delete_task(
     id: Annotated[str, "ID of the task you want to delete"],
 ) -> None:
     """Delete a task from your task list"""
+    if id not in database:
+        raise KeyError(f"No task found with ID '{id}'")
     list_task({id: database[id]})
     del database[id]
 
@@ -176,6 +181,8 @@ def list_task(
 ) -> None:
     """List all tasks or filter them by status and date"""
     DATETIME_FORMAT: str = "%Y/%m/%d %H:%M:%S"
+    if status not in (valid := get_args(TaskStatus)) + ("all",):
+        raise ValueError(f"Invalid status '{status}'. Valid statuses are: {', '.join(valid)} or 'all'")
     date_checker = get_date_checker(date)
     table = (
         {
