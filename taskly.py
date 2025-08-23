@@ -37,10 +37,8 @@ def main() -> None:
 
     try:
         query(database, **args)
-    except KeyError:
-        sys.exit("No task found with the provided ID")
     except Exception as e:
-        sys.exit(e.args[0])
+        sys.exit(str(e))
 
     save_database(database, DATABASE_PATH)
 
@@ -48,10 +46,9 @@ def main() -> None:
 def load_database(path: str) -> Database:
     try:
         with open(path) as f:
-            database: Database = json.load(f)
+            return json.load(f)
     except FileNotFoundError:
-        database = {}
-    return database
+        return {}
 
 
 def save_database(database: Database, path: str) -> None:
@@ -127,9 +124,13 @@ def update_task(
     status: Annotated[Optional[TaskStatus], "New status for the task", "--status", "-s"] = None,
 ) -> None:
     """Update the description or status of a task"""
+    if id not in database:
+        raise KeyError(f"No task found with ID '{id}'")
     if description is not None:
         database[id]["description"] = description
     if status is not None:
+        if status not in (valid := get_args(TaskStatus)):
+            raise ValueError(f"Invalid status '{status}'. Valid statuses are: {', '.join(valid)}")
         database[id]["status"] = status
     database[id]["updated-at"] = datetime.today().isoformat(timespec="seconds")
     list_task({id: database[id]})
@@ -159,6 +160,8 @@ def delete_task(
     id: Annotated[str, "ID of the task you want to delete"],
 ) -> None:
     """Delete a task from your task list"""
+    if id not in database:
+        raise KeyError(f"No task found with ID '{id}'")
     list_task({id: database[id]})
     del database[id]
 
@@ -176,6 +179,8 @@ def list_task(
 ) -> None:
     """List all tasks or filter them by status and date"""
     DATETIME_FORMAT: str = "%Y/%m/%d %H:%M:%S"
+    if status not in (valid := get_args(TaskStatus)) + ("all",):
+        raise ValueError(f"Invalid status '{status}'. Valid statuses are: {', '.join(valid)} or 'all'")
     date_checker = get_date_checker(date)
     table = (
         {

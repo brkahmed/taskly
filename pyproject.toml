@@ -1,6 +1,6 @@
 [project]
 name = "taskly"
-version = "1.2.0"
+version = "1.2.1"
 description = "A CLI application to manage tasks."
 authors = [{ name = "Ahmed", email = "braika7med@gmail.com" }]
 readme = "README.md"
