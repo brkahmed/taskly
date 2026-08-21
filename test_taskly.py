@@ -13,7 +13,7 @@ from taskly import (
     update_task,
 )
 
-DATABASE_PATH: str = "test.json"
+DATABASE_PATH: Path = Path(__file__).parent / ("test.json")
 database: Database = load_database(DATABASE_PATH)
 
 
