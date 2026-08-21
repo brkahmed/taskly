@@ -1,4 +1,4 @@
-from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -38,7 +38,7 @@ def test_update_task() -> None:
     update_task(database, "1")
     assert database["1"]["status"] == "in-progress" and database["1"]["description"] == "goodbye, world"
     with pytest.raises(ValueError):
-        update_task(database, "1", status="invalid-status")
+        update_task(database, "1", status="invalid-status")  # type: ignore
 
 
 def test_mark_in_progress_task() -> None:
@@ -70,7 +70,7 @@ def test_delete_task() -> None:
 
 def test_list_task() -> None:
     with pytest.raises(ValueError):
-        update_task(database, "1", status="invalid-status")
+        update_task(database, "1", status="invalid-status")  # type: ignore
 
 
 def test_date_checker() -> None:
