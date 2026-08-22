@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from taskly import (
@@ -7,14 +5,12 @@ from taskly import (
     add_task,
     delete_task,
     get_date_checker,
-    load_database,
     mark_done_task,
     mark_in_progress_task,
     update_task,
 )
 
-DATABASE_PATH: Path = Path(__file__).parent / ("test.json")
-database: Database = load_database(DATABASE_PATH)
+database: Database = {}
 
 
 def test_add_task() -> None:
