@@ -2,14 +2,15 @@ import json
 import operator
 import sys
 from argparse import ArgumentParser
+from collections.abc import Callable
 from datetime import datetime
 from inspect import signature
 from pathlib import Path
+from types import UnionType
 from typing import (
     Annotated,
-    Callable,
+    Any,
     Literal,
-    Optional,
     TypeAlias,
     TypedDict,
     Union,
@@ -19,13 +20,24 @@ from typing import (
 
 from tabulate import tabulate
 
-supported_queries: dict[str, dict] = {}
-TaskStatus: TypeAlias = Literal["done", "in-progress", "todo"]
+QueryFunc: TypeAlias = Callable[..., None]  # noqa: UP040
+
+QueryArg = TypedDict(  # noqa: UP013
+    "QueryArg", {"name_or_flags": list[str], "help": str, "choices": tuple[Any] | None, "default": Any}
+)
+
+Query = TypedDict("Query", {"target": QueryFunc, "help": str, "args": list[QueryArg]})  # noqa: UP013
+
+
+TaskStatus: TypeAlias = Literal["done", "in-progress", "todo"]  # noqa: UP040
 DatabaseRow = TypedDict(
     "DatabaseRow",
     {"description": str, "status": TaskStatus, "created-at": str, "updated-at": str},
 )
-Database: TypeAlias = dict[str, DatabaseRow]
+Database: TypeAlias = dict[str, DatabaseRow]  # noqa: UP040
+
+
+supported_queries: dict[str, Query] = {}
 
 
 def main() -> None:
@@ -54,20 +66,18 @@ def save_database(database: Database, path: Path) -> None:
         json.dump(database, f, indent=2, ensure_ascii=False)
 
 
-def parse_args() -> tuple[Callable, dict, Path]:
+def parse_args() -> tuple[QueryFunc, dict[str, Any], Path]:
     parser: ArgumentParser = ArgumentParser(description="A CLI application to efficiently manage your tasks")
     parser.add_argument("--db", help="Path to the database file (default: '~/taskly.json')", default="~/taskly.json")
     subparsers = parser.add_subparsers(title="commands", dest="command", required=True)
 
     for name, properties in supported_queries.items():
-        p = subparsers.add_parser(name, help=properties["help"])
+        p: ArgumentParser = subparsers.add_parser(name, help=properties["help"])
         for arg in properties["args"]:
-            name_or_flags = arg.pop("name_or_flags")
-            p.add_argument(*name_or_flags, **arg)
-            arg["name_or_flags"] = name_or_flags  # to keep the original name or flags
+            p.add_argument(*arg["name_or_flags"], help=arg["help"], choices=arg["choices"], default=arg["default"])
 
-    args: dict = vars(parser.parse_args())
-    query: Callable = supported_queries[args.pop("command")]["target"]
+    args: dict[str, Any] = vars(parser.parse_args())
+    query: QueryFunc = supported_queries[args.pop("command")]["target"]
     db_path: Path = Path(args.pop("db")).expanduser().resolve()
     if db_path.is_dir():
         parser.error(f"Database path '{db_path}' is a directory")
@@ -75,28 +85,26 @@ def parse_args() -> tuple[Callable, dict, Path]:
     return query, args, db_path
 
 
-def add_query(func: Callable) -> Callable:
+def add_query[T: QueryFunc](func: T) -> T:
     """Decorator to add a query to the supported queries dictionary."""
-    name = func.__name__.removesuffix("_task").replace("_", "-")
-    supported_queries[name] = {
-        "target": func,
-        "help": func.__doc__,
-        "args": [],
-    }
+    name = func.__name__.removesuffix("_task").replace("_", "-")  # type: ignore
+    supported_queries[name] = Query(target=func, help=func.__doc__ or "", args=[])
+
     args = supported_queries[name]["args"]
     for param in signature(func).parameters.values():
         if param.name == "database":
             continue
         type, *metadata = get_args(param.annotation)
-        if get_origin(type) is Union:
+        if get_origin(type) in (Union, UnionType):
             type = get_args(type)[0]
+
         args.append(
-            {
-                "name_or_flags": metadata[1:] if len(metadata) > 1 else [param.name],
-                "help": metadata[0],
-                "choices": get_args(type) if get_origin(type) is Literal else None,
-                "default": param.default if param.default is not param.empty else None,
-            }
+            QueryArg(
+                name_or_flags=metadata[1:] if len(metadata) > 1 else [param.name],
+                help=metadata[0],
+                choices=get_args(type) if get_origin(type) is Literal else None,
+                default=param.default if param.default is not param.empty else None,
+            )
         )
     return func
 
@@ -122,8 +130,8 @@ def add_task(
 def update_task(
     database: Database,
     id: Annotated[str, "ID of the task you want to update"],
-    description: Annotated[Optional[str], "New description for the task", "--description", "-d"] = None,
-    status: Annotated[Optional[TaskStatus], "New status for the task", "--status", "-s"] = None,
+    description: Annotated[str | None, "New description for the task", "--description", "-d"] = None,
+    status: Annotated[TaskStatus | None, "New status for the task", "--status", "-s"] = None,
 ) -> None:
     """Update the description or status of a task"""
     if id not in database:
@@ -173,7 +181,7 @@ def list_task(
     database: Database,
     status: Annotated[Literal[TaskStatus, "all"], "List all tasks or filter them by status", "--status", "-s"] = "all",
     date: Annotated[
-        Optional[str],
+        str | None,
         "Filter tasks by date (YYYY-MM-DD). Use <, >, = operators (e.g. '<2025-01-01' means on or before)",
         "--date",
         "-d",
@@ -198,10 +206,10 @@ def list_task(
     print(tabulate(table, tablefmt="rounded_grid", headers="keys") or "Nothing to display")
 
 
-def get_date_checker(date_string: Optional[str] = None) -> Callable[[str], bool]:
+def get_date_checker(date_string: str | None = None) -> Callable[[str], bool]:
     if date_string is None:
         return lambda _: True  # If no date is provided, return True for all dates
-    operators = {
+    operators: dict[str, Callable[..., bool]] = {
         "<": operator.le,
         ">": operator.ge,
         "=": operator.eq,
@@ -211,7 +219,6 @@ def get_date_checker(date_string: Optional[str] = None) -> Callable[[str], bool]
         if date_string.startswith(op):
             date_string = date_string[len(op) :].strip()
             break
-
     for fmt in ["%Y-%m-%d", "%Y-%m", "%Y"]:
         try:
             date = datetime.strptime(date_string, fmt).date()
